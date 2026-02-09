@@ -25,6 +25,8 @@ Aplicación web progresiva (PWA) para grabar y transcribir audio usando **IA** c
 
 👉 Continúa leyendo este README para instrucciones
 
+📊 **¿No sabes cuál elegir?** Lee la [comparación detallada](COMPARISON.md)
+
 ---
 
 ## ✨ Características (Versión Backend)
