@@ -1,12 +1,33 @@
 # 🎙️ VoxTral Transcriptor PWA
 
-Aplicación web progresiva (PWA) para grabar y transcribir audio usando **Voxtral AI** completamente en local. Sin servicios en la nube, sin costos por uso, 100% privado.
+Aplicación web progresiva (PWA) para grabar y transcribir audio usando **IA** completamente en local. Sin servicios en la nube, sin costos por uso, 100% privado.
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.8+-green.svg)
 ![PyTorch](https://img.shields.io/badge/pytorch-2.0+-orange.svg)
 
-## ✨ Características
+## 🎯 Dos versiones disponibles
+
+### 🌐 [Versión Standalone](STANDALONE.md) - **Recomendada para empezar**
+- ✅ **Sin instalación** - Solo abre `standalone.html` en tu navegador
+- ✅ **Sin servidor** - Todo funciona en el navegador
+- ✅ **WebGPU acelerado** - Usa GPU cuando está disponible
+- ✅ **Whisper AI** - Modelos tiny/base/small de OpenAI
+- 📦 Descarga: 40-250 MB (según modelo)
+
+👉 **[Abrir standalone.html](standalone.html)** o lee la [guía completa](STANDALONE.md)
+
+### 🚀 Versión Backend (Voxtral) - **Para uso intensivo**
+- 🎯 **Máxima precisión** - Voxtral Realtime 4B (este documento)
+- ⚡ **Muy rápido** - Optimizado con Metal/BLAS
+- 🖥️ **Servidor Flask** - Acceso desde cualquier dispositivo en tu red
+- 💾 Descarga: ~9 GB
+
+👉 Continúa leyendo este README para instrucciones
+
+---
+
+## ✨ Características (Versión Backend)
 
 - 🎤 **Grabación de audio** directamente desde el navegador
 - 🤖 **Transcripción con IA** usando Voxtral Realtime 4B

@@ -1,0 +1,20 @@
+{
+  "name": "VoxTral Browser - Transcriptor Offline",
+  "short_name": "VoxTral",
+  "description": "Transcriptor de audio 100% en el navegador con Whisper AI",
+  "start_url": "/standalone.html",
+  "display": "standalone",
+  "background_color": "#1a1a2e",
+  "theme_color": "#6c5ce7",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "frontend/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["productivity", "utilities"],
+  "offline_enabled": true
+}

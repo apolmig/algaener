@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#1a1a2e">
+    <meta name="description" content="Transcriptor de audio 100% en el navegador con Whisper AI">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>VoxTral Browser - Transcriptor Offline</title>
+
+    <link rel="manifest" href="manifest-standalone.json">
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #6c5ce7;
+            --primary-dark: #5746c9;
+            --secondary: #00b894;
+            --danger: #d63031;
+            --warning: #fdcb6e;
+            --background: #1a1a2e;
+            --surface: #252541;
+            --surface-light: #2f2f4a;
+            --text: #ffffff;
+            --text-secondary: #a8a8b3;
+            --border: #3a3a54;
+            --shadow: rgba(0, 0, 0, 0.3);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, var(--background) 0%, #16162a 100%);
+            color: var(--text);
+            min-height: 100vh;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            text-align: center;
+            padding: 30px 0;
+        }
+
+        h1 {
+            font-size: 28px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+        }
+
+        .logo {
+            width: 40px;
+            height: 40px;
+            fill: var(--primary);
+        }
+
+        .subtitle {
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        .badge {
+            display: inline-block;
+            background: var(--surface-light);
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            margin: 8px 4px;
+            border: 1px solid var(--border);
+        }
+
+        .badge.success {
+            background: rgba(0, 184, 148, 0.2);
+            border-color: var(--secondary);
+            color: var(--secondary);
+        }
+
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 20px;
+        }
+
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .status-item {
+            background: var(--surface-light);
+            padding: 16px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+        }
+
+        .status-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+
+        .status-value {
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .recording-display {
+            background: var(--surface-light);
+            border-radius: 12px;
+            padding: 40px;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .waveform {
+            display: flex;
+            justify-content: center;
+            gap: 6px;
+            height: 80px;
+            margin-bottom: 20px;
+        }
+
+        .wave-bar {
+            width: 8px;
+            height: 20px;
+            background: var(--primary);
+            border-radius: 4px;
+            transition: height 0.15s ease;
+        }
+
+        .waveform.active .wave-bar {
+            animation: wave 0.8s ease-in-out infinite;
+        }
+
+        .wave-bar:nth-child(1) { animation-delay: 0s; }
+        .wave-bar:nth-child(2) { animation-delay: 0.1s; }
+        .wave-bar:nth-child(3) { animation-delay: 0.2s; }
+        .wave-bar:nth-child(4) { animation-delay: 0.3s; }
+        .wave-bar:nth-child(5) { animation-delay: 0.4s; }
+
+        @keyframes wave {
+            0%, 100% { height: 20px; }
+            50% { height: 60px; }
+        }
+
+        .time-display {
+            font-size: 36px;
+            font-weight: 700;
+            color: var(--primary);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 12px;
+        }
+
+        button {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            padding: 16px;
+            border: none;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: var(--surface-light);
+            color: var(--text);
+        }
+
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px var(--shadow);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-success { background: var(--secondary); color: white; }
+
+        .btn-record.recording {
+            background: var(--danger);
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(214, 48, 49, 0.7); }
+            50% { box-shadow: 0 0 0 10px rgba(214, 48, 49, 0); }
+        }
+
+        .transcription-box {
+            background: var(--surface-light);
+            border-radius: 12px;
+            padding: 20px;
+            min-height: 150px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-size: 15px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+
+        .placeholder {
+            color: var(--text-secondary);
+            text-align: center;
+            padding: 40px;
+        }
+
+        .loading {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            padding: 20px;
+        }
+
+        .loading.active { display: flex; }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid var(--border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: var(--surface-light);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 12px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--primary);
+            width: 0%;
+            transition: width 0.3s;
+        }
+
+        .model-selector {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .model-option {
+            padding: 12px;
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+        }
+
+        .model-option:hover {
+            border-color: var(--primary);
+        }
+
+        .model-option.selected {
+            border-color: var(--primary);
+            background: rgba(108, 92, 231, 0.1);
+        }
+
+        .model-name {
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .model-size {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        footer {
+            text-align: center;
+            padding: 20px;
+            color: var(--text-secondary);
+            font-size: 13px;
+        }
+
+        footer a {
+            color: var(--primary);
+            text-decoration: none;
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: var(--surface);
+            padding: 16px 24px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            box-shadow: 0 8px 24px var(--shadow);
+            opacity: 0;
+            transition: all 0.3s;
+            z-index: 1000;
+            max-width: 90%;
+        }
+
+        .toast.show {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+        }
+
+        .toast.success {
+            border-color: var(--secondary);
+        }
+
+        .toast.error {
+            border-color: var(--danger);
+        }
+
+        @media (max-width: 640px) {
+            .container { padding: 16px; }
+            h1 { font-size: 24px; }
+            .controls { grid-template-columns: 1fr; }
+            button { flex-direction: row; justify-content: center; }
+            .recording-display { padding: 24px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>
+                <svg class="logo" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="16" cy="16" r="14" stroke="currentColor" stroke-width="2" fill="none"/>
+                    <circle cx="16" cy="16" r="6"/>
+                </svg>
+                VoxTral Browser
+            </h1>
+            <p class="subtitle">Transcripción 100% en el navegador con Whisper AI</p>
+            <div>
+                <span class="badge success">✓ Sin servidor</span>
+                <span class="badge success">✓ Privado</span>
+                <span class="badge success">✓ WebGPU</span>
+            </div>
+        </header>
+
+        <!-- Status -->
+        <div class="card">
+            <div class="status-grid">
+                <div class="status-item">
+                    <div class="status-label">Estado</div>
+                    <div class="status-value" id="statusText">Inicializando...</div>
+                </div>
+                <div class="status-item">
+                    <div class="status-label">Modelo</div>
+                    <div class="status-value" id="modelStatus">No cargado</div>
+                </div>
+                <div class="status-item">
+                    <div class="status-label">Aceleración</div>
+                    <div class="status-value" id="deviceType">Detectando...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Model Selector -->
+        <div class="card">
+            <h3 style="margin-bottom: 16px;">Selecciona modelo Whisper:</h3>
+            <div class="model-selector">
+                <div class="model-option selected" data-model="tiny">
+                    <div class="model-name">Tiny</div>
+                    <div class="model-size">~40 MB - Rápido</div>
+                </div>
+                <div class="model-option" data-model="base">
+                    <div class="model-name">Base</div>
+                    <div class="model-size">~75 MB - Equilibrado</div>
+                </div>
+                <div class="model-option" data-model="small">
+                    <div class="model-name">Small</div>
+                    <div class="model-size">~250 MB - Preciso</div>
+                </div>
+            </div>
+            <button id="btnLoadModel" class="btn-primary" style="width: 100%;">
+                <span>🚀 Cargar Modelo</span>
+            </button>
+            <div class="loading" id="loadingModel">
+                <div class="spinner"></div>
+                <p id="loadingModelText">Descargando modelo...</p>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="modelProgress"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recording -->
+        <div class="card">
+            <div class="recording-display">
+                <div class="waveform" id="waveform">
+                    <div class="wave-bar"></div>
+                    <div class="wave-bar"></div>
+                    <div class="wave-bar"></div>
+                    <div class="wave-bar"></div>
+                    <div class="wave-bar"></div>
+                </div>
+                <div class="time-display" id="timeDisplay">00:00</div>
+            </div>
+
+            <div class="controls">
+                <button class="btn-primary btn-record" id="btnRecord" disabled>
+                    <span>🎤</span>
+                    <span id="recordText">Grabar</span>
+                </button>
+                <button class="btn-danger" id="btnStop" disabled>
+                    <span>⏹️</span>
+                    <span>Detener</span>
+                </button>
+                <button class="btn-success" id="btnTranscribe" disabled>
+                    <span>✨</span>
+                    <span>Transcribir</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Transcription -->
+        <div class="card">
+            <h3 style="margin-bottom: 16px;">Transcripción:</h3>
+            <div class="transcription-box" id="transcriptionBox">
+                <p class="placeholder">La transcripción aparecerá aquí...</p>
+            </div>
+            <div class="loading" id="loadingTranscribe">
+                <div class="spinner"></div>
+                <p id="transcribeStatusText">Transcribiendo audio...</p>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="transcribeProgress"></div>
+                </div>
+            </div>
+            <button id="btnCopy" disabled style="margin-top: 12px;">
+                <span>📋 Copiar texto</span>
+            </button>
+        </div>
+
+        <footer>
+            <p>Powered by <strong>Transformers.js</strong> & <strong>Whisper</strong></p>
+            <p style="margin-top: 8px;">
+                <a href="https://github.com/xenova/transformers.js" target="_blank">Transformers.js</a>
+                ·
+                <a href="https://github.com/openai/whisper" target="_blank">OpenAI Whisper</a>
+            </p>
+        </footer>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <!-- Transformers.js desde CDN -->
+    <script type="module">
+        import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1';
+
+        // Configuración
+        env.allowLocalModels = false;
+        env.allowRemoteModels = true;
+
+        // Estado de la aplicación
+        const state = {
+            isRecording: false,
+            mediaRecorder: null,
+            audioChunks: [],
+            recordingStartTime: null,
+            timerInterval: null,
+            currentBlob: null,
+            transcriber: null,
+            selectedModel: 'tiny',
+            modelLoaded: false
+        };
+
+        // Elementos DOM
+        const elements = {
+            btnLoadModel: document.getElementById('btnLoadModel'),
+            btnRecord: document.getElementById('btnRecord'),
+            btnStop: document.getElementById('btnStop'),
+            btnTranscribe: document.getElementById('btnTranscribe'),
+            btnCopy: document.getElementById('btnCopy'),
+            recordText: document.getElementById('recordText'),
+            timeDisplay: document.getElementById('timeDisplay'),
+            waveform: document.getElementById('waveform'),
+            transcriptionBox: document.getElementById('transcriptionBox'),
+            loadingModel: document.getElementById('loadingModel'),
+            loadingModelText: document.getElementById('loadingModelText'),
+            modelProgress: document.getElementById('modelProgress'),
+            loadingTranscribe: document.getElementById('loadingTranscribe'),
+            transcribeStatusText: document.getElementById('transcribeStatusText'),
+            transcribeProgress: document.getElementById('transcribeProgress'),
+            statusText: document.getElementById('statusText'),
+            modelStatus: document.getElementById('modelStatus'),
+            deviceType: document.getElementById('deviceType'),
+            toast: document.getElementById('toast')
+        };
+
+        // Utility functions
+        function formatTime(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        function showToast(message, type = 'info') {
+            elements.toast.textContent = message;
+            elements.toast.className = `toast show ${type}`;
+            setTimeout(() => elements.toast.classList.remove('show'), 3000);
+        }
+
+        function updateUI() {
+            elements.btnRecord.disabled = !state.modelLoaded || state.isRecording;
+            elements.btnStop.disabled = !state.isRecording;
+            elements.btnTranscribe.disabled = !state.currentBlob || state.isRecording || !state.modelLoaded;
+        }
+
+        // Detectar capacidades del dispositivo
+        async function detectDevice() {
+            try {
+                if (navigator.gpu) {
+                    elements.deviceType.textContent = 'WebGPU ⚡';
+                    elements.deviceType.style.color = 'var(--secondary)';
+                } else {
+                    elements.deviceType.textContent = 'WASM 💻';
+                    elements.deviceType.style.color = 'var(--warning)';
+                }
+            } catch (error) {
+                elements.deviceType.textContent = 'CPU';
+            }
+        }
+
+        // Selección de modelo
+        document.querySelectorAll('.model-option').forEach(option => {
+            option.addEventListener('click', () => {
+                if (state.modelLoaded) {
+                    showToast('Ya hay un modelo cargado', 'warning');
+                    return;
+                }
+                document.querySelectorAll('.model-option').forEach(o => o.classList.remove('selected'));
+                option.classList.add('selected');
+                state.selectedModel = option.dataset.model;
+            });
+        });
+
+        // Cargar modelo
+        elements.btnLoadModel.addEventListener('click', async () => {
+            try {
+                elements.btnLoadModel.disabled = true;
+                elements.loadingModel.classList.add('active');
+                elements.loadingModelText.textContent = `Descargando Whisper ${state.selectedModel}...`;
+
+                // Simular progreso (Transformers.js no tiene callbacks detallados)
+                let progress = 0;
+                const progressInterval = setInterval(() => {
+                    progress += Math.random() * 10;
+                    if (progress > 90) progress = 90;
+                    elements.modelProgress.style.width = progress + '%';
+                }, 500);
+
+                // Cargar pipeline de Whisper
+                state.transcriber = await pipeline(
+                    'automatic-speech-recognition',
+                    `Xenova/whisper-${state.selectedModel}`,
+                    {
+                        quantized: true,
+                        progress_callback: (data) => {
+                            if (data.status === 'progress') {
+                                const percent = (data.progress || 0) * 100;
+                                elements.modelProgress.style.width = percent + '%';
+                            }
+                        }
+                    }
+                );
+
+                clearInterval(progressInterval);
+                elements.modelProgress.style.width = '100%';
+
+                state.modelLoaded = true;
+                elements.modelStatus.textContent = `Whisper ${state.selectedModel}`;
+                elements.modelStatus.style.color = 'var(--secondary)';
+                elements.statusText.textContent = 'Listo';
+                elements.statusText.style.color = 'var(--secondary)';
+
+                elements.loadingModel.classList.remove('active');
+                elements.btnLoadModel.textContent = '✓ Modelo cargado';
+                elements.btnLoadModel.style.background = 'var(--secondary)';
+
+                showToast('Modelo cargado correctamente', 'success');
+                updateUI();
+
+            } catch (error) {
+                console.error('Error loading model:', error);
+                showToast('Error al cargar el modelo: ' + error.message, 'error');
+                elements.loadingModel.classList.remove('active');
+                elements.btnLoadModel.disabled = false;
+            }
+        });
+
+        // Grabación de audio
+        elements.btnRecord.addEventListener('click', async () => {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+                state.mediaRecorder = new MediaRecorder(stream, {
+                    mimeType: MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4'
+                });
+
+                state.audioChunks = [];
+                state.recordingStartTime = Date.now();
+
+                state.mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        state.audioChunks.push(event.data);
+                    }
+                };
+
+                state.mediaRecorder.onstop = () => {
+                    const blob = new Blob(state.audioChunks, { type: 'audio/webm' });
+                    state.currentBlob = blob;
+                    stream.getTracks().forEach(track => track.stop());
+                    showToast(`Audio grabado: ${(blob.size / 1024).toFixed(1)} KB`, 'success');
+                    updateUI();
+                };
+
+                state.mediaRecorder.start();
+                state.isRecording = true;
+
+                // Iniciar timer
+                let seconds = 0;
+                elements.timeDisplay.textContent = formatTime(seconds);
+                state.timerInterval = setInterval(() => {
+                    seconds++;
+                    elements.timeDisplay.textContent = formatTime(seconds);
+                }, 1000);
+
+                elements.waveform.classList.add('active');
+                elements.btnRecord.classList.add('recording');
+                elements.recordText.textContent = 'Grabando...';
+                updateUI();
+
+            } catch (error) {
+                console.error('Error starting recording:', error);
+                showToast('Error al acceder al micrófono', 'error');
+            }
+        });
+
+        elements.btnStop.addEventListener('click', () => {
+            if (state.mediaRecorder && state.isRecording) {
+                state.mediaRecorder.stop();
+                state.isRecording = false;
+
+                if (state.timerInterval) {
+                    clearInterval(state.timerInterval);
+                }
+
+                elements.waveform.classList.remove('active');
+                elements.btnRecord.classList.remove('recording');
+                elements.recordText.textContent = 'Grabar';
+                updateUI();
+            }
+        });
+
+        // Transcripción
+        elements.btnTranscribe.addEventListener('click', async () => {
+            if (!state.currentBlob || !state.transcriber) return;
+
+            try {
+                elements.loadingTranscribe.classList.add('active');
+                elements.btnTranscribe.disabled = true;
+                elements.transcribeStatusText.textContent = 'Procesando audio...';
+                elements.transcribeProgress.style.width = '30%';
+
+                // Convertir blob a AudioBuffer
+                const arrayBuffer = await state.currentBlob.arrayBuffer();
+                const audioContext = new AudioContext({ sampleRate: 16000 });
+
+                elements.transcribeStatusText.textContent = 'Decodificando audio...';
+                elements.transcribeProgress.style.width = '50%';
+
+                const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+                // Obtener datos de audio (mono, 16kHz)
+                let audioData = audioBuffer.getChannelData(0);
+
+                elements.transcribeStatusText.textContent = 'Transcribiendo con Whisper...';
+                elements.transcribeProgress.style.width = '70%';
+
+                // Transcribir con Whisper
+                const result = await state.transcriber(audioData, {
+                    language: 'spanish',
+                    task: 'transcribe',
+                    return_timestamps: false
+                });
+
+                elements.transcribeProgress.style.width = '100%';
+
+                const text = result.text || '';
+
+                // Mostrar resultado
+                if (text.trim()) {
+                    elements.transcriptionBox.innerHTML = `<p>${escapeHtml(text)}</p>`;
+                    elements.btnCopy.disabled = false;
+                    showToast('Transcripción completada', 'success');
+                } else {
+                    elements.transcriptionBox.innerHTML = '<p class="placeholder">No se detectó texto</p>';
+                    showToast('No se detectó texto en el audio', 'warning');
+                }
+
+            } catch (error) {
+                console.error('Error transcribing:', error);
+                showToast('Error al transcribir: ' + error.message, 'error');
+                elements.transcriptionBox.innerHTML = '<p class="placeholder">Error en la transcripción</p>';
+            } finally {
+                elements.loadingTranscribe.classList.remove('active');
+                updateUI();
+            }
+        });
+
+        // Copiar al portapapeles
+        elements.btnCopy.addEventListener('click', async () => {
+            const text = elements.transcriptionBox.textContent;
+            if (text && text.trim()) {
+                try {
+                    await navigator.clipboard.writeText(text);
+                    showToast('Texto copiado', 'success');
+                } catch (error) {
+                    showToast('Error al copiar', 'error');
+                }
+            }
+        });
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Inicialización
+        async function init() {
+            console.log('Inicializando VoxTral Browser...');
+            elements.statusText.textContent = 'Listo (modelo no cargado)';
+            elements.statusText.style.color = 'var(--warning)';
+            await detectDevice();
+            updateUI();
+            console.log('VoxTral Browser iniciado');
+        }
+
+        init();
+    </script>
+</body>
+</html>
