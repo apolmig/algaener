@@ -1,0 +1,10 @@
+# Backend dependencies
+flask>=2.3.0
+flask-cors>=4.0.0
+
+# Voxtral dependencies
+torch>=2.0.0
+safetensors>=0.3.0
+soundfile>=0.12.0
+soxr>=0.3.0
+numpy>=1.24.0

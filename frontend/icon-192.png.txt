@@ -1,0 +1,6 @@
+Este archivo es un placeholder para icon-192.png
+
+Para generar el icono real, ejecuta:
+  convert -background none -resize 192x192 frontend/icon.svg frontend/icon-192.png
+
+O usa cualquier herramienta de diseño para crear un PNG de 192x192 píxeles.
