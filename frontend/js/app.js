@@ -236,10 +236,93 @@ async function transcribeAudio() {
 }
 
 async function convertToWav(blob) {
-    // For now, just return the blob
-    // In production, you might want to convert to proper WAV format
-    // using Web Audio API or a library like audiobuffer-to-wav
-    return blob;
+    try {
+        // Si ya es WAV, retornar directamente
+        if (blob.type === 'audio/wav' || blob.type === 'audio/wave') {
+            return blob;
+        }
+
+        // Convertir usando Web Audio API
+        const arrayBuffer = await blob.arrayBuffer();
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)({
+            sampleRate: 16000  // 16kHz como requiere Voxtral
+        });
+
+        const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+        // Convertir a WAV PCM 16-bit mono
+        const wavBlob = await audioBufferToWav(audioBuffer);
+
+        return wavBlob;
+    } catch (error) {
+        console.warn('No se pudo convertir audio, usando original:', error);
+        return blob;
+    }
+}
+
+function audioBufferToWav(audioBuffer) {
+    // Convertir AudioBuffer a formato WAV
+    const numberOfChannels = 1;  // Mono
+    const sampleRate = audioBuffer.sampleRate;
+    const format = 1;  // PCM
+    const bitDepth = 16;
+
+    // Obtener datos del canal (convertir a mono si es necesario)
+    let channelData;
+    if (audioBuffer.numberOfChannels === 1) {
+        channelData = audioBuffer.getChannelData(0);
+    } else {
+        // Mezclar a mono
+        const left = audioBuffer.getChannelData(0);
+        const right = audioBuffer.getChannelData(1);
+        channelData = new Float32Array(left.length);
+        for (let i = 0; i < left.length; i++) {
+            channelData[i] = (left[i] + right[i]) / 2;
+        }
+    }
+
+    // Convertir float32 a int16
+    const int16Data = new Int16Array(channelData.length);
+    for (let i = 0; i < channelData.length; i++) {
+        const s = Math.max(-1, Math.min(1, channelData[i]));
+        int16Data[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+    }
+
+    // Crear cabecera WAV
+    const dataLength = int16Data.length * 2;
+    const buffer = new ArrayBuffer(44 + dataLength);
+    const view = new DataView(buffer);
+
+    // RIFF chunk descriptor
+    writeString(view, 0, 'RIFF');
+    view.setUint32(4, 36 + dataLength, true);
+    writeString(view, 8, 'WAVE');
+
+    // fmt sub-chunk
+    writeString(view, 12, 'fmt ');
+    view.setUint32(16, 16, true);  // Subchunk1Size (16 para PCM)
+    view.setUint16(20, format, true);  // AudioFormat (PCM = 1)
+    view.setUint16(22, numberOfChannels, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * numberOfChannels * bitDepth / 8, true);  // ByteRate
+    view.setUint16(32, numberOfChannels * bitDepth / 8, true);  // BlockAlign
+    view.setUint16(34, bitDepth, true);
+
+    // data sub-chunk
+    writeString(view, 36, 'data');
+    view.setUint32(40, dataLength, true);
+
+    // Escribir datos de audio
+    const dataView = new Int16Array(buffer, 44);
+    dataView.set(int16Data);
+
+    return new Blob([buffer], { type: 'audio/wav' });
+}
+
+function writeString(view, offset, string) {
+    for (let i = 0; i < string.length; i++) {
+        view.setUint8(offset + i, string.charCodeAt(i));
+    }
 }
 
 function displayTranscription(text) {
