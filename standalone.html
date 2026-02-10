@@ -5,10 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#1a1a2e">
     <meta name="description" content="Transcriptor de audio 100% en el navegador con Whisper AI">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>VoxTral Browser - Transcriptor Offline</title>
 
     <link rel="manifest" href="manifest-standalone.json">
+    <!-- Favicon inline para evitar 404 -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='40' fill='%236c5ce7'/></svg>">
 
     <style>
         * {
@@ -265,9 +269,27 @@
 
         .progress-fill {
             height: 100%;
-            background: var(--primary);
+            background: linear-gradient(90deg, var(--primary), var(--secondary));
             width: 0%;
-            transition: width 0.3s;
+            transition: width 0.3s ease;
+        }
+
+        .download-info {
+            font-size: 12px;
+            color: var(--text-secondary);
+            text-align: center;
+            margin-top: 8px;
+        }
+
+        .help-text {
+            font-size: 13px;
+            color: var(--text-secondary);
+            text-align: center;
+            margin-top: 12px;
+            padding: 12px;
+            background: rgba(108, 92, 231, 0.1);
+            border-radius: 8px;
+            border-left: 3px solid var(--primary);
         }
 
         .model-selector {
@@ -417,7 +439,13 @@
                 <div class="progress-bar">
                     <div class="progress-fill" id="modelProgress"></div>
                 </div>
+                <p class="download-info" id="downloadInfo"></p>
             </div>
+            <p class="help-text" style="margin-top: 16px;">
+                💡 <strong>Primera vez:</strong> El modelo se descarga de HuggingFace (~40-250 MB según tu elección).
+                Se guarda en caché del navegador y no se descarga de nuevo.
+                <br><strong>Recomendación:</strong> Empieza con "Tiny" (más rápido).
+            </p>
         </div>
 
         <!-- Recording -->
@@ -514,6 +542,7 @@
             loadingModel: document.getElementById('loadingModel'),
             loadingModelText: document.getElementById('loadingModelText'),
             modelProgress: document.getElementById('modelProgress'),
+            downloadInfo: document.getElementById('downloadInfo'),
             loadingTranscribe: document.getElementById('loadingTranscribe'),
             transcribeStatusText: document.getElementById('transcribeStatusText'),
             transcribeProgress: document.getElementById('transcribeProgress'),
@@ -570,38 +599,92 @@
             });
         });
 
-        // Cargar modelo
+        // Cargar modelo con mejor manejo de progreso
+        let modelLoadAbortController = null;
+
         elements.btnLoadModel.addEventListener('click', async () => {
             try {
                 elements.btnLoadModel.disabled = true;
                 elements.loadingModel.classList.add('active');
-                elements.loadingModelText.textContent = `Descargando Whisper ${state.selectedModel}...`;
 
-                // Simular progreso (Transformers.js no tiene callbacks detallados)
-                let progress = 0;
-                const progressInterval = setInterval(() => {
-                    progress += Math.random() * 10;
-                    if (progress > 90) progress = 90;
-                    elements.modelProgress.style.width = progress + '%';
-                }, 500);
+                // Crear abort controller para poder cancelar
+                modelLoadAbortController = new AbortController();
 
-                // Cargar pipeline de Whisper
+                const modelName = `Xenova/whisper-${state.selectedModel}`;
+                let lastUpdate = Date.now();
+                let downloadedFiles = 0;
+                let totalFiles = 0;
+
+                elements.loadingModelText.textContent = `Conectando a HuggingFace...`;
+                elements.modelProgress.style.width = '5%';
+
+                // Cargar pipeline de Whisper con callbacks mejorados
                 state.transcriber = await pipeline(
                     'automatic-speech-recognition',
-                    `Xenova/whisper-${state.selectedModel}`,
+                    modelName,
                     {
                         quantized: true,
+                        revision: 'main',
                         progress_callback: (data) => {
-                            if (data.status === 'progress') {
-                                const percent = (data.progress || 0) * 100;
-                                elements.modelProgress.style.width = percent + '%';
+                            const now = Date.now();
+
+                            // Actualizar cada 500ms para evitar spam
+                            if (now - lastUpdate < 500 && data.status !== 'done') {
+                                return;
                             }
+                            lastUpdate = now;
+
+                            if (data.status === 'initiate') {
+                                totalFiles = data.total || 1;
+                                elements.loadingModelText.textContent = `Descargando modelo (${totalFiles} archivos)...`;
+                            }
+                            else if (data.status === 'download') {
+                                const fileName = data.file ? data.file.split('/').pop() : 'archivo';
+                                elements.loadingModelText.textContent = `Descargando: ${fileName}`;
+
+                                if (data.progress !== undefined) {
+                                    const percent = Math.min(data.progress * 100, 99);
+                                    elements.modelProgress.style.width = percent + '%';
+                                }
+
+                                // Mostrar información adicional si está disponible
+                                if (data.loaded && data.total) {
+                                    const loadedMB = (data.loaded / 1024 / 1024).toFixed(1);
+                                    const totalMB = (data.total / 1024 / 1024).toFixed(1);
+                                    elements.downloadInfo.textContent = `${loadedMB} MB / ${totalMB} MB`;
+                                } else if (data.progress) {
+                                    elements.downloadInfo.textContent = `${(data.progress * 100).toFixed(0)}%`;
+                                }
+                            }
+                            else if (data.status === 'progress') {
+                                if (data.file) {
+                                    const fileName = data.file.split('/').pop();
+                                    elements.loadingModelText.textContent = `Procesando: ${fileName}`;
+                                }
+
+                                if (data.progress !== undefined && data.progress > 0) {
+                                    const percent = Math.min(data.progress * 100, 99);
+                                    elements.modelProgress.style.width = percent + '%';
+                                }
+                            }
+                            else if (data.status === 'done') {
+                                downloadedFiles++;
+                                const percent = totalFiles > 0 ? (downloadedFiles / totalFiles) * 90 : 85;
+                                elements.modelProgress.style.width = percent + '%';
+                                elements.loadingModelText.textContent = `Descargado: ${downloadedFiles}/${totalFiles} archivos`;
+                            }
+                            else if (data.status === 'ready') {
+                                elements.loadingModelText.textContent = 'Inicializando modelo...';
+                                elements.modelProgress.style.width = '95%';
+                            }
+
+                            console.log('[Model Load]', data.status, data);
                         }
                     }
                 );
 
-                clearInterval(progressInterval);
                 elements.modelProgress.style.width = '100%';
+                elements.loadingModelText.textContent = '¡Listo!';
 
                 state.modelLoaded = true;
                 elements.modelStatus.textContent = `Whisper ${state.selectedModel}`;
@@ -609,18 +692,40 @@
                 elements.statusText.textContent = 'Listo';
                 elements.statusText.style.color = 'var(--secondary)';
 
-                elements.loadingModel.classList.remove('active');
+                setTimeout(() => {
+                    elements.loadingModel.classList.remove('active');
+                }, 1000);
+
                 elements.btnLoadModel.textContent = '✓ Modelo cargado';
                 elements.btnLoadModel.style.background = 'var(--secondary)';
 
-                showToast('Modelo cargado correctamente', 'success');
+                showToast(`Modelo Whisper ${state.selectedModel} cargado`, 'success');
                 updateUI();
 
             } catch (error) {
                 console.error('Error loading model:', error);
-                showToast('Error al cargar el modelo: ' + error.message, 'error');
+
+                let errorMsg = 'Error al cargar el modelo';
+                if (error.message.includes('network') || error.message.includes('fetch')) {
+                    errorMsg = 'Error de red. Verifica tu conexión a internet.';
+                } else if (error.message.includes('aborted')) {
+                    errorMsg = 'Carga cancelada';
+                } else {
+                    errorMsg = error.message;
+                }
+
+                showToast(errorMsg, 'error');
                 elements.loadingModel.classList.remove('active');
                 elements.btnLoadModel.disabled = false;
+                elements.loadingModelText.textContent = 'Error al cargar';
+                elements.modelProgress.style.width = '0%';
+
+                // Sugerencia para el usuario
+                if (!state.modelLoaded) {
+                    setTimeout(() => {
+                        showToast('Intenta con el modelo "tiny" (más rápido de descargar)', 'info');
+                    }, 3000);
+                }
             }
         });
 
