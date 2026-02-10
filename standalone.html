@@ -446,6 +446,16 @@
                 Se guarda en caché del navegador y no se descarga de nuevo.
                 <br><strong>Recomendación:</strong> Empieza con "Tiny" (más rápido).
             </p>
+            <div style="background: #2a2a3e; border-left: 4px solid #6c5ce7; padding: 12px; margin-top: 12px; border-radius: 4px; font-size: 13px;">
+                <strong style="color: #6c5ce7;">💬 Consejos para mejor calidad:</strong><br>
+                • <strong>Tiny:</strong> Rápido pero puede tener imprecisiones. Ideal para pruebas.<br>
+                • <strong>Base:</strong> Mejor balance entre velocidad y precisión. Recomendado.<br>
+                • <strong>Small:</strong> Mayor precisión, menos alucinaciones. Para audios importantes.<br>
+                • Habla claro y a volumen normal (evita susurros o gritos).<br>
+                • Minimiza ruido de fondo (música, conversaciones, tráfico).<br>
+                • Grabaciones de 5-30 segundos funcionan mejor que muy cortas (&lt;3s).<br>
+                • Si ves texto repetitivo o sin sentido, usa un modelo más grande.
+            </div>
         </div>
 
         <!-- Recording -->
@@ -815,25 +825,76 @@
                 // Obtener datos de audio (mono, 16kHz)
                 let audioData = audioBuffer.getChannelData(0);
 
+                // Normalizar audio para mejor calidad
+                const maxAmplitude = Math.max(...Array.from(audioData).map(Math.abs));
+                if (maxAmplitude > 0 && maxAmplitude < 0.9) {
+                    // Normalizar solo si es necesario (evitar clipping)
+                    const normalizationFactor = 0.9 / maxAmplitude;
+                    audioData = audioData.map(sample => sample * normalizationFactor);
+                }
+
+                // Verificar que hay audio válido
+                const rms = Math.sqrt(audioData.reduce((sum, val) => sum + val * val, 0) / audioData.length);
+                if (rms < 0.001) {
+                    throw new Error('El audio está demasiado silencioso o vacío');
+                }
+
                 elements.transcribeStatusText.textContent = 'Transcribiendo con Whisper...';
                 elements.transcribeProgress.style.width = '70%';
 
-                // Transcribir con Whisper
+                // Transcribir con Whisper - Configuración mejorada para reducir alucinaciones
                 const result = await state.transcriber(audioData, {
                     language: 'spanish',
                     task: 'transcribe',
-                    return_timestamps: false
+                    return_timestamps: false,
+                    // Anti-hallucination parameters
+                    chunk_length_s: 30,  // Procesar en chunks de 30 segundos
+                    stride_length_s: 5,  // 5 segundos de overlap entre chunks
+                    // Quality improvements
+                    num_beams: 5,  // Beam search para mejor calidad (default es 1)
+                    // Thresholds para detectar y prevenir alucinaciones
+                    compression_ratio_threshold: 1.35,  // Detecta repeticiones
+                    logprob_threshold: -1.0,  // Filtra predicciones de baja calidad
+                    no_speech_threshold: 0.6,  // Detecta silencio
+                    condition_on_previous_text: false  // Reduce propagación de errores
                 });
 
                 elements.transcribeProgress.style.width = '100%';
 
-                const text = result.text || '';
+                let text = result.text || '';
+
+                // Post-procesamiento: limpiar alucinaciones comunes
+                if (text.trim()) {
+                    // Remover repeticiones excesivas de palabras/frases
+                    text = text.replace(/(.{3,}?)\1{3,}/g, '$1');
+
+                    // Remover patrones comunes de alucinación de Whisper
+                    const hallucination_patterns = [
+                        /^\s*\[.*?\]\s*/,  // [música], [aplausos], etc al inicio
+                        /\s*\(.*?\)\s*$/,  // (inaudible), (ruido) al final
+                        /\s*\.\.\.\.+\s*/g,  // Puntos excesivos
+                        /\s*Subtítulos.*$/i,  // Texto de subtítulos
+                        /\s*Traducción.*$/i,  // Texto de traducción
+                    ];
+
+                    hallucination_patterns.forEach(pattern => {
+                        text = text.replace(pattern, ' ');
+                    });
+
+                    text = text.trim();
+                }
 
                 // Mostrar resultado
                 if (text.trim()) {
                     elements.transcriptionBox.innerHTML = `<p>${escapeHtml(text)}</p>`;
                     elements.btnCopy.disabled = false;
-                    showToast('Transcripción completada', 'success');
+
+                    // Advertencia si el texto parece sospechoso
+                    if (text.length < 10 && audioData.length / 16000 > 3) {
+                        showToast('Transcripción completada (puede ser imprecisa con audios cortos)', 'warning');
+                    } else {
+                        showToast('Transcripción completada', 'success');
+                    }
                 } else {
                     elements.transcriptionBox.innerHTML = '<p class="placeholder">No se detectó texto</p>';
                     showToast('No se detectó texto en el audio', 'warning');
