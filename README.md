@@ -13,9 +13,10 @@ Aplicación web progresiva (PWA) para grabar y transcribir audio usando **IA** c
 - ✅ **Sin servidor** - Todo funciona en el navegador
 - ✅ **WebGPU acelerado** - Usa GPU cuando está disponible
 - ✅ **Whisper AI** - Modelos tiny/base/small de OpenAI
+- ✅ **Funciona en GitHub Pages** - Despliega gratis en segundos
 - 📦 Descarga: 40-250 MB (según modelo)
 
-👉 **[Abrir standalone.html](standalone.html)** o lee la [guía completa](STANDALONE.md)
+👉 **[Probar ahora](https://apolmig.github.io/algaener/)** | [Abrir local](standalone.html) | [Guía completa](STANDALONE.md)
 
 ### 🚀 Versión Backend (Voxtral) - **Para uso intensivo**
 - 🎯 **Máxima precisión** - Voxtral Realtime 4B (este documento)
